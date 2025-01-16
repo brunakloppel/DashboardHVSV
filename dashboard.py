@@ -25,6 +25,16 @@ METRICAS_DISPONIVEIS = {
         'Faturamento por Tipo',
         'Ticket Médio',
         'Análise Financeira'
+    ],
+    'Análise Plantão': [
+        'Distribuição Plantão',
+        'Plantão por Dia',
+        'Plantão Emergencial'
+    ],
+    'Ticket Médio Plantão': [  # Nova categoria
+        'Evolução Ticket Plantão',
+        'Comparativo Ticket Plantão',
+        'Impacto no Faturamento'
     ]
 }
 
@@ -61,12 +71,18 @@ def load_data(excel_file):
         df_tabela1 = pd.read_excel(excel_file, sheet_name='Tabela1', skiprows=2)
         df_tabela2 = pd.read_excel(excel_file, sheet_name='Tabela2', skiprows=2)
         df_tabela3 = pd.read_excel(excel_file, sheet_name='Tabela3', skiprows=2)
+        df_tabela4a = pd.read_excel(excel_file, sheet_name='Tabela4A', skiprows=2)
+        df_tabela4b = pd.read_excel(excel_file, sheet_name='Tabela4B', skiprows=2)
+        df_tabela4c = pd.read_excel(excel_file, sheet_name='Tabela4C', skiprows=2)
+        df_tabela4d = pd.read_excel(excel_file, sheet_name='Tabela4D', skiprows=2)
+        df_tabela4e = pd.read_excel(excel_file, sheet_name='Tabela4E', skiprows=2)
         df_tabela5 = pd.read_excel(excel_file, sheet_name='Tabela5', skiprows=2)
+        df_tabela7 = pd.read_excel(excel_file, sheet_name='Tabela7', skiprows=2)
         
-        return df_tabela1, df_tabela2, df_tabela3, df_tabela5
+        return df_tabela1, df_tabela2, df_tabela3, df_tabela4a, df_tabela4b, df_tabela4c, df_tabela4d, df_tabela4e, df_tabela5, df_tabela7
     except Exception as e:
         st.error(f'Erro ao carregar dados: {str(e)}')
-        return None, None, None, None
+        return None, None, None, None, None, None, None, None, None
 
     
 def criar_grafico_perfil_clientes(df3, unidade_selecionada, ano_selecionado, mes_selecionado):
@@ -552,21 +568,34 @@ def criar_grafico_faturamento(df5, df3, tipo, unidade_selecionada, ano_seleciona
         """, unsafe_allow_html=True)
 
         fig = go.Figure()
-        for categoria, cor in zip(['Faturamento Clientes Novos', 'Faturamento Clientes Retornantes'], ['#1f77b4', '#ff7f0e']):
+        cores = {
+            'Faturamento Clientes Novos': {2023: '#1f77b4', 2024: '#17becf'},      # Azul escuro e azul claro
+            'Faturamento Clientes Retornantes': {2023: '#ff7f0e', 2024: '#ffa07a'}  # Laranja e laranja claro
+        }
+        
+        for categoria in ['Faturamento Clientes Novos', 'Faturamento Clientes Retornantes']:
             for ano in sorted(ano_selecionado):
                 df_ano = df_filtered[df_filtered['Ano'] == ano]
                 fig.add_trace(go.Bar(
                     x=df_ano['Mês'],
                     y=df_ano[categoria],
-                    name=f"{categoria} - {ano}",
-                    marker_color=cor
+                    name=f"{categoria.replace('Faturamento ', '')} - {ano}",
+                    marker_color=cores[categoria][ano]
                 ))
+        
         fig.update_layout(
             title=f"Faturamento por Categoria - {', '.join(unidade_selecionada)}",
             xaxis_title="Mês",
             yaxis_title="Faturamento (R$)",
             barmode="group",
-            height=500
+            height=500,
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
         )
 
         
@@ -794,6 +823,352 @@ def criar_grafico_faturamento(df5, df3, tipo, unidade_selecionada, ano_seleciona
     
     return fig
 
+def criar_grafico_ticket_plantao(df7, tipo, unidade_selecionada, ano_selecionado, mes_selecionado):
+    """Cria gráficos relacionados ao ticket médio de plantão"""
+    fig = None  # Inicializa a figura como None
+
+    try:
+        # Filtrando os dados
+        df_filtrado = df7[
+            (df7['Unidade'].isin(unidade_selecionada)) & 
+            (df7['Ano'].isin(ano_selecionado)) & 
+            (df7['Mês'].isin(mes_selecionado))
+        ]
+
+        if tipo == 'Evolução Ticket Plantão':
+            st.markdown("""
+            <div class="graph-explanation" style="background-color: #003366; color: white; padding: 15px; margin-bottom: 15px;">
+                <h4>Como interpretar este gráfico:</h4>
+                <p>Este gráfico apresenta três métricas importantes:</p>
+                <ul>
+                    <li><strong>Ticket Médio Geral (azul):</strong> Valor médio de todas as consultas realizadas</li>
+                    <li><strong>Representatividade (laranja):</strong> Percentual que o plantão representa no faturamento total</li>
+                    <li><strong>Ticket Médio Plantão (rosa):</strong> Valor médio específico dos atendimentos de plantão</li>
+                </ul>
+                <p>A comparação destas métricas permite avaliar o desempenho financeiro dos plantões em relação ao total.</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+            # Definição das cores para cada tipo de ticket e ano
+            cores = {
+                'Plantão': {
+                    2023: '#1f77b4',  # Azul escuro
+                    2024: '#17becf'   # Azul claro
+                },
+                'Geral': {
+                    2023: '#ff7f0e',  # Laranja escuro
+                    2024: '#ffbb78'   # Laranja claro
+                }
+            }
+
+            # Cria a figura
+            fig = go.Figure()
+            
+            # Verifica se há dados para plotar
+            if not df_filtrado.empty:
+                ordem_meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                             'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+                df_filtrado['Mês'] = pd.Categorical(df_filtrado['Mês'], categories=ordem_meses, ordered=True)
+                df_filtrado = df_filtrado.sort_values(['Ano', 'Mês'])
+
+                for ano in sorted(ano_selecionado):
+                    df_ano = df_filtrado[df_filtrado['Ano'] == ano]
+                    
+                    if not df_ano.empty:
+                        # Usando o nome correto da coluna
+                        if 'Ticket Médio de Atendimento de Plantão' in df_ano.columns:
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=df_ano['Mês'],
+                                    y=df_ano['Ticket Médio de Atendimento de Plantão'],
+                                    name=f'Ticket Plantão {ano}',
+                                    mode='lines+markers',
+                                    line=dict(color=cores['Plantão'][ano])
+                                )
+                            )
+                        
+                        # Usando os cálculos para o ticket médio geral
+                        df_ano['Ticket Médio Geral'] = df_ano['Faturamento Total Líquido Hospital'] / df_ano['Total Consultas Plantão']
+                        fig.add_trace(
+                            go.Scatter(
+                                x=df_ano['Mês'],
+                                y=df_ano['Ticket Médio Geral'],
+                                name=f'Ticket Geral {ano}',
+                                mode='lines+markers',
+                                line=dict(
+                                    color=cores['Geral'][ano],
+                                    dash='dash'
+                                )
+                            )
+                        )
+
+            # Atualiza o layout
+            fig.update_layout(
+                title="Evolução do Ticket Médio de Plantão",
+                xaxis_title="Mês",
+                yaxis_title="Ticket Médio (R$)",
+                height=400,
+                yaxis=dict(tickformat="R$,.2f"),
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1
+                )
+            )
+
+            # Se não há dados, adiciona anotação informativa
+            if not fig.data:
+                fig.add_annotation(
+                    text="Não há dados disponíveis para o período selecionado",
+                    xref="paper",
+                    yref="paper",
+                    x=0.5,
+                    y=0.5,
+                    showarrow=False,
+                    font=dict(size=14)
+                )
+
+                
+
+        if tipo == 'Comparativo Ticket Plantão':
+            st.markdown("""
+            <div class="graph-explanation" style="color: white; background-color: #003366; padding: 15px; margin-bottom: 15px;">
+                <h4 style="color: #FFFFFF;">Como interpretar este gráfico:</h4>
+                <p>Este gráfico compara os tickets médios dos atendimentos de plantão ao longo do tempo.</p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            if not df_filtrado.empty:
+                fig = make_subplots(
+                    rows=2, cols=1,
+                    subplot_titles=('Ticket Médio de Plantão por Unidade', 'Evolução Mensal do Ticket Médio'),
+                    vertical_spacing=0.2
+                )
+
+                  # Gráfico superior - Comparação por tipo de plantão
+                # Gráfico superior - Análise do Ticket Médio e Representatividade
+                anos = sorted(ano_selecionado)
+                ticket_values = []
+                rep_values = []
+                
+                for ano in anos:
+                    df_ano = df_filtrado[df_filtrado['Ano'] == ano]
+                    if not df_ano.empty:
+                        # Calcula médias do período
+                        ticket_medio = df_ano['Faturamento Total Líquido de Serviços de Plantão'].sum() / df_ano['Total Consultas Plantão'].sum()
+                        # Calcula a representatividade
+                        fat_plantao = df_ano['Faturamento Total Líquido de Serviços de Plantão'].sum()
+                        fat_total = df_ano['Faturamento Total Líquido Hospital'].sum()
+                        representatividade = (fat_plantao / fat_total * 100) if fat_total > 0 else 0
+                        
+                        # Debug para verificar valores
+                        st.write(f"Debug - Representatividade para {ano}: {representatividade:.1f}%")
+                        
+                        ticket_values.append(ticket_medio)
+                        rep_values.append(representatividade)
+                
+                # Adiciona barras para o ticket médio
+                fig.add_trace(
+                    go.Bar(
+                        x=anos,
+                        y=ticket_values,
+                        text=[f'R$ {val:,.2f}' for val in ticket_values],
+                        textposition='auto',
+                        name='Ticket Médio',
+                        marker_color='#1f77b4',
+                        offsetgroup=0
+                    ),
+                    row=1, col=1
+                )
+                
+                # Adiciona linha de representatividade
+                fig.add_trace(
+                    go.Scatter(
+                        x=anos,
+                        y=rep_values,
+                        text=[f'{val:.1f}%' for val in rep_values],
+                        mode='lines+markers+text',
+                        name='Representatividade (%)',
+                        yaxis='y2',
+                        marker_color='#ff7f0e',
+                        textposition='top center'
+                    ),
+                    row=1, col=1
+                )   
+
+                # Gráfico inferior - Evolução temporal
+                cores = {
+                    'ticket_geral_2023': '#2ca02c',  # Verde para ticket médio geral 2023
+                    'ticket_geral_2024': '#1f77b4',  # Azul para ticket médio geral 2024
+                    'ticket_plantao_2023': '#e377c2',  # Rosa para ticket plantão 2023
+                    'ticket_plantao_2024': '#d62728'   # Vermelho para ticket plantão 2024
+                }
+                
+                ordem_meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+                             'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+                df_filtrado['Mês'] = pd.Categorical(df_filtrado['Mês'], categories=ordem_meses, ordered=True)
+                df_filtrado = df_filtrado.sort_values(['Ano', 'Mês'])
+
+                 # Adiciona as linhas para cada ano
+                for ano in sorted(ano_selecionado):
+                    df_ano = df_filtrado[df_filtrado['Ano'] == ano]
+                    if not df_ano.empty:
+                        # Linha do ticket médio geral
+                        ticket_medio_geral = df_ano['Faturamento Total Líquido Hospital'] / df_ano['Total Consultas Plantão']
+                        fig.add_trace(
+                            go.Scatter(
+                                x=df_ano['Mês'],
+                                y=ticket_medio_geral,
+                                name=f'Ticket Médio Geral {ano}',
+                                mode='lines+markers',
+                                line=dict(
+                                    color=cores[f'ticket_geral_{ano}'], 
+                                    dash='dot'
+                                ),
+                                marker=dict(size=8)
+                            ),
+                            row=2, col=1
+                        )
+                        
+                        # Linha do ticket médio plantão
+                        fig.add_trace(
+                            go.Scatter(
+                                x=df_ano['Mês'],
+                                y=df_ano['Ticket Médio de Atendimento de Plantão'],
+                                name=f'Ticket Plantão {ano}',
+                                mode='lines+markers',
+                                line=dict(
+                                    color=cores[f'ticket_plantao_{ano}']
+                                ),
+                                marker=dict(size=8)
+                            ),
+                            row=2, col=1
+                        )
+
+                # Atualiza o layout
+                fig.update_layout(
+                    height=800,
+                    showlegend=True,
+                    title_text=f"Análise do Ticket Médio de Plantão - {', '.join(unidade_selecionada)}",
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=-0.2,
+                        xanchor="center",
+                        x=0.5
+                    )
+                )
+                
+                # Atualiza formatação dos eixos
+                fig.update_yaxes(
+                    title_text="Ticket Médio (R$)", 
+                    tickformat="R$,.2f",
+                    row=1, col=1
+                )
+                fig.update_yaxes(
+                    title_text="Ticket Médio (R$)", 
+                    tickformat="R$,.2f",
+                    row=2, col=1
+                )
+                fig.update_xaxes(title_text="Unidade", row=1, col=1)
+                fig.update_xaxes(title_text="Mês", row=2, col=1)
+
+        if tipo == 'Impacto no Faturamento':
+            # Primeiro verifica se o dataframe está vazio
+            if df_filtrado.empty:
+                st.warning("Não há dados disponíveis para o período selecionado.")
+                return None
+                
+            # Verifica se todas as colunas necessárias existem
+            colunas_necessarias = [
+                'Faturamento Total Líquido de Serviços de Plantão',
+                'Total Consultas Plantão',
+                'Faturamento Total Líquido Hospital'
+            ]
+            
+            if not all(coluna in df_filtrado.columns for coluna in colunas_necessarias):
+                st.warning("Algumas colunas necessárias não estão disponíveis para análise de impacto no faturamento.")
+                return None
+                
+            # Cria os subplots
+            fig = make_subplots(
+                rows=2, cols=2,
+                specs=[[{"type": "indicator"}, {"type": "indicator"}],
+                      [{"type": "pie", "colspan": 2}, None]],
+                subplot_titles=('Ticket Médio Plantão', 'Representatividade', 'Distribuição do Faturamento')
+            )
+
+            # Calcula o ticket médio do plantão
+            ticket_medio_plantao = (df_filtrado['Faturamento Total Líquido de Serviços de Plantão'].sum() / 
+                                  df_filtrado['Total Consultas Plantão'].sum())
+            
+            # Calcula o ticket médio geral
+            ticket_medio_geral = (df_filtrado['Faturamento Total Líquido Hospital'].sum() / 
+                                df_filtrado['Total Consultas Plantão'].sum())
+            
+            # Indicador de Ticket Médio
+            fig.add_trace(
+                go.Indicator(
+                    mode="number+delta",
+                    value=ticket_medio_plantao,
+                    number={'prefix': "R$", 'valueformat': ",.2f"},
+                    delta={'reference': ticket_medio_geral,
+                          'relative': True,
+                          'valueformat': ".1%"},
+                    title={'text': "Ticket Médio Plantão vs Geral"}
+                ),
+                row=1, col=1
+            )
+
+            # Calcula a representatividade
+            fat_plantao = df_filtrado['Faturamento Total Líquido de Serviços de Plantão'].sum()
+            fat_total = df_filtrado['Faturamento Total Líquido Hospital'].sum()
+            representatividade = (fat_plantao / fat_total * 100) if fat_total > 0 else 0
+            
+            # Indicador de Representatividade
+            fig.add_trace(
+                go.Indicator(
+                    mode="number",
+                    value=representatividade,
+                    number={'suffix': "%", 'valueformat': ".1f"},
+                    title={'text': "Representatividade no Faturamento"}
+                ),
+                row=1, col=2
+            )
+
+            # Gráfico de pizza para distribuição do faturamento
+            fig.add_trace(
+                go.Pie(
+                    labels=['Plantão', 'Outros Atendimentos'],
+                    values=[fat_plantao, fat_total - fat_plantao],
+                    hole=0.4,
+                    marker=dict(colors=['#e377c2', '#1f77b4'])
+                ),
+                row=2, col=1
+            )
+
+            # Atualiza o layout
+            fig.update_layout(
+                height=800,
+                showlegend=True,
+                title_text=f"Impacto do Plantão no Faturamento - {', '.join(unidade_selecionada)}",
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=-0.2,
+                    xanchor="center",
+                    x=0.5
+                )
+            )
+            
+        return fig
+        
+    except Exception as e:
+        st.error(f"Erro ao criar o gráfico: {str(e)}")
+        st.write("Debug - Erro detalhado:", e)
+        return None
 
 
 def criar_dashboard():
@@ -815,9 +1190,14 @@ def criar_dashboard():
         st.title('Dashboard Interativo - Hospital Veterinário')
         st.markdown("---")
 
-    # Carrega dados
-    df1, df2, df3, df5 = load_data('Análise mês Clientes Comparativo anos.xlsx')
-    
+    # Carrega as tabelas do arquivo Excel
+    # df1: Consultas gerais
+    # df2: Consultas dia
+    # df3: Consultas plantão
+    # df4a-e: Detalhamento dos plantões
+    # df5: Faturamento
+    df1, df2, df3, df4a, df4b, df4c, df4d, df4e, df5, df7 = load_data('Análise mês Clientes Comparativo anos.xlsx')
+    # Verifica se os dados foram carregados corretamente
     if df1 is None:
         return
     
@@ -942,19 +1322,83 @@ def criar_dashboard():
 
     st.markdown("---")
 
+# Adiciona novos indicadores (KPIs) para análise de plantão
+    if any(categoria == 'Análise Plantão' for categoria, _ in metricas_selecionadas):
+        st.markdown("""
+            <div style="background-color: #003366; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                <h3 style="color: white; margin: 0;">Indicadores de Plantão</h3>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        col_plantao = st.columns(4)
+        
+        with col_plantao[0]:
+            # Soma de todos os tipos de consultas de plantão
+            total_plantao = df4a[
+                (df4a['Unidade'].isin(unidade_selecionada)) &
+                (df4a['Ano'].isin(ano_selecionado)) &
+                (df4a['Mês'].isin(mes_selecionado))
+            ][[
+                'Total Consulta Plantão Domingo/Feriado',
+                'Total Consulta Plantão Noturno',
+                'Total Consulta Plantão Sábado',
+                'Total Consulta Procedimento Emergencial Plantão'
+            ]].sum().sum()
+            
+            st.metric("Total de Atendimentos em Plantão", f"{total_plantao:,}")
+            
+        with col_plantao[1]:
+            total_emergencia = df4a[
+                (df4a['Unidade'].isin(unidade_selecionada)) &
+                (df4a['Ano'].isin(ano_selecionado)) &
+                (df4a['Mês'].isin(mes_selecionado))
+            ]['Total Consulta Procedimento Emergencial Plantão'].sum()
+            st.metric("Total de Atendimentos de Emergência", f"{total_emergencia:,}")
+            
+        with col_plantao[2]:
+            fat_plantao = df4a[
+                (df4a['Unidade'].isin(unidade_selecionada)) &
+                (df4a['Ano'].isin(ano_selecionado)) &
+                (df4a['Mês'].isin(mes_selecionado))
+            ][[
+                'Faturamento Líquido Total Consulta Plantão Domingo/Feriado',
+                'Faturamento Líquido Total Consulta Plantão Noturno',
+                'Faturamento Líquido Total Consulta Plantão Sábado',
+                'Faturamento Líquido Total Consulta Procedimento Emergencial Plantão'
+            ]].sum().sum()
+            st.metric("Faturamento Total de Plantões", f"R$ {fat_plantao:,.2f}")
+            
+        with col_plantao[3]:
+            if total_plantao > 0:
+                ticket_plantao = fat_plantao / total_plantao
+            else:
+                ticket_plantao = 0
+            st.metric("Ticket Médio dos Plantões", f"R$ {ticket_plantao:,.2f}")
 
-
-    # Organiza os gráficos selecionados
+    # Obtém o número total de métricas selecionadas pelo usuário
     num_metricas = len(metricas_selecionadas)
+
+    # Cria os gráficos de acordo com as métricas selecionadas
     for i in range(0, num_metricas, cols_por_linha):
         cols = st.columns(cols_por_linha)
+        
         for j in range(cols_por_linha):
             if i + j < num_metricas:
                 categoria, metrica = metricas_selecionadas[i + j]
+                
                 with cols[j]:
                     st.markdown(f"#### {metrica}")
                     
-                    if categoria == 'Consultas':
+                    fig = None  # Inicializa fig como None
+                    
+                    if categoria == 'Análise Plantão':
+                        fig = criar_grafico_plantao(
+                            df4a, df4b, df4c, df4d, df4e,
+                            metrica, unidade_selecionada,
+                            ano_selecionado, mes_selecionado
+                        )
+                    
+                    elif categoria == 'Consultas':
                         fig = criar_grafico_consultas(
                             df1, metrica, unidade_selecionada, 
                             ano_selecionado, mes_selecionado
@@ -973,18 +1417,21 @@ def criar_dashboard():
 
                     elif categoria == 'Faturamento':
                         fig = criar_grafico_faturamento(
-                            df5,  # DataFrame principal
-                            df3,  # DataFrame adicional
-                            metrica,
-                            unidade_selecionada,
-                            ano_selecionado,
-                            mes_selecionado  # Este parâmetro estava faltando
+                            df5, df3, metrica, unidade_selecionada,
+                            ano_selecionado, mes_selecionado
                         )
                     
+                    elif categoria == 'Ticket Médio Plantão':  # Adiciona esta condição
+                        fig = criar_grafico_ticket_plantao(
+                            df7, metrica, unidade_selecionada,
+                            ano_selecionado, mes_selecionado
+                        )
+                    
+                    # Verifica se a figura foi criada antes de tentar exibi-la
                     if fig is not None:
                         st.plotly_chart(fig, use_container_width=True)
                     else:
-                        st.warning(f"Gráfico {metrica} não implementado ainda.")
+                        st.warning(f"Não foi possível criar o gráfico {metrica}.")
 
     df_filtered = df5[
     (df5['Unidade'].isin(unidade_selecionada)) &
@@ -1019,7 +1466,577 @@ def criar_dashboard():
     proporcao_retornantes = 100 - proporcao_novos
     st.markdown(f"🟢 **Proporção do faturamento:** {proporcao_novos:.1f}% Novos / {proporcao_retornantes:.1f}% Retornantes")
 
-                        
+def criar_grafico_plantao(df4a, df4b, df4c, df4d, df4e, tipo, unidade_selecionada, ano_selecionado, mes_selecionado):
+    """Cria gráficos para análise de plantão"""
+    
+    if tipo == 'Distribuição Plantão':
+        st.markdown("""
+        <div class="graph-explanation" style="color: white; background-color: #003366; border-radius: 5px; padding: 15px; margin-bottom: 15px;">
+            <h4 style="color: #FFFFFF;">Distribuição dos Atendimentos de Plantão</h4>
+            <p>Este gráfico mostra a distribuição dos atendimentos de plantão por tipo:</p>
+            <ul>
+                <li>Domingos e Feriados</li>
+                <li>Sábados</li>
+                <li>Plantão Noturno</li>
+                <li>Emergências</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Filtra dados para as unidades, anos e meses selecionados
+        df_filtered = df4a[
+            (df4a['Unidade'].isin(unidade_selecionada)) &
+            (df4a['Ano'].isin(ano_selecionado)) &
+            (df4a['Mês'].isin(mes_selecionado))
+        ]
+        
+        # Cria gráfico de distribuição
+        fig = make_subplots(rows=1, cols=2, 
+                           subplot_titles=('Volume de Atendimentos', 'Faturamento'),
+                           specs=[[{"type": "pie"}, {"type": "pie"}]])
+        
+        # Distribuição do volume de atendimentos
+        atendimentos = {
+            'Domingos e Feriados': df_filtered['Total Consulta Plantão Domingo/Feriado'].sum(),
+            'Sábados': df_filtered['Total Consulta Plantão Sábado'].sum(),
+            'Plantão Noturno': df_filtered['Total Consulta Plantão Noturno'].sum(),
+            'Emergências': df_filtered['Total Consulta Procedimento Emergencial Plantão'].sum()
+        }
+        
+        # Distribuição do faturamento
+        faturamento = {
+            'Domingos e Feriados': df_filtered['Faturamento Líquido Total Consulta Plantão Domingo/Feriado'].sum(),
+            'Sábados': df_filtered['Faturamento Líquido Total Consulta Plantão Sábado'].sum(),
+            'Plantão Noturno': df_filtered['Faturamento Líquido Total Consulta Plantão Noturno'].sum(),
+            'Emergências': df_filtered['Faturamento Líquido Total Consulta Procedimento Emergencial Plantão'].sum()
+        }
+        
+        fig.add_trace(
+            go.Pie(labels=list(atendimentos.keys()),
+                  values=list(atendimentos.values()),
+                  name="Volume"),
+            row=1, col=1
+        )
+        
+        fig.add_trace(
+            go.Pie(labels=list(faturamento.keys()),
+                  values=list(faturamento.values()),
+                  name="Faturamento"),
+            row=1, col=2
+        )
+        
+        fig.update_layout(height=500, title_text="Distribuição de Plantão por Tipo")
+
+        
+        
+        return fig
+        
+    elif tipo == 'Plantão por Dia':
+        st.markdown("""
+        <div class="graph-explanation" style="color: white; background-color: #003366; border-radius: 5px; padding: 15px; margin-bottom: 15px;">
+            <h4 style="color: #FFFFFF;">Como interpretar este gráfico:</h4>
+            <p>Esta visualização apresenta uma análise detalhada dos atendimentos de plantão por dia específico:</p>
+            <ul>
+                <li><strong>Gráfico Superior - Domingos e Feriados:</strong>
+                    <ul>
+                        <li>Mostra o volume de atendimentos em plantões aos domingos e feriados</li>
+                        <li>Diferencia entre novos clientes e retornantes</li>
+                        <li>Permite visualizar padrões de demanda em finais de semana/feriados</li>
+                    </ul>
+                </li>
+                <li><strong>Gráfico Inferior - Sábados:</strong>
+                    <ul>
+                        <li>Apresenta o volume de atendimentos em plantões aos sábados</li>
+                        <li>Separa entre novos clientes e retornantes</li>
+                        <li>Identifica a demanda específica dos sábados</li>
+                    </ul>
+                </li>
+            </ul>
+            <p>Use esta análise para:</p>
+            <ul>
+                <li>Otimizar a escala de profissionais nos diferentes dias</li>
+                <li>Identificar períodos de maior demanda</li>
+                <li>Comparar o perfil de atendimento entre sábados e domingos/feriados</li>
+                <li>Planejar recursos específicos para cada tipo de dia</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+        df_filtered_b = df4b[
+            (df4b['Unidade'].isin(unidade_selecionada)) &
+            (df4b['Ano'].isin(ano_selecionado)) &
+            (df4b['Mês'].isin(mes_selecionado))
+        ]
+        
+        df_filtered_c = df4c[
+            (df4c['Unidade'].isin(unidade_selecionada)) &
+            (df4c['Ano'].isin(ano_selecionado)) &
+            (df4c['Mês'].isin(mes_selecionado))
+        ]
+        
+        # Cria os subplots
+        fig = make_subplots(rows=2, cols=1,
+                           subplot_titles=('Domingos e Feriados', 'Sábados'),
+                           vertical_spacing=0.2)
+        
+        # Definição de cores específicas para cada tipo e ano
+        cores = {
+            2023: {
+                'Novos Dom/Fer': '#1f77b4',     # Azul escuro
+                'Retornantes Dom/Fer': '#aec7e8', # Azul claro
+                'Novos Sáb': '#ff7f0e',         # Laranja escuro
+                'Retornantes Sáb': '#ffbb78'    # Laranja claro
+            },
+            2024: {
+                'Novos Dom/Fer': '#2ca02c',     # Verde escuro
+                'Retornantes Dom/Fer': '#98df8a', # Verde claro
+                'Novos Sáb': '#d62728',         # Vermelho escuro
+                'Retornantes Sáb': '#ff9896'    # Vermelho claro
+            }
+        }
+        
+        # Domingos e Feriados
+        for ano in sorted(ano_selecionado):
+            df_ano_b = df_filtered_b[df_filtered_b['Ano'] == ano]
+            
+            fig.add_trace(
+                go.Bar(
+                    name=f'Novos Dom/Fer {ano}',
+                    x=df_ano_b['Mês'],
+                    y=df_ano_b['Total Consulta Plantão Domingo/Feriado - Google Novos'],
+                    marker_color=cores[ano]['Novos Dom/Fer']
+                ),
+                row=1, col=1
+            )
+            
+            fig.add_trace(
+                go.Bar(
+                    name=f'Retornantes Dom/Fer {ano}',
+                    x=df_ano_b['Mês'],
+                    y=df_ano_b['Total Consulta Plantão Domingo/Feriado - Google Retornantes'],
+                    marker_color=cores[ano]['Retornantes Dom/Fer']
+                ),
+                row=1, col=1
+            )
+        
+        # Sábados
+        for ano in sorted(ano_selecionado):
+            df_ano_c = df_filtered_c[df_filtered_c['Ano'] == ano]
+            
+            fig.add_trace(
+                go.Bar(
+                    name=f'Novos Sáb {ano}',
+                    x=df_ano_c['Mês'],
+                    y=df_ano_c['Total Consulta Plantão Sábado - Google Novos'],
+                    marker_color=cores[ano]['Novos Sáb']
+                ),
+                row=2, col=1
+            )
+            
+            fig.add_trace(
+                go.Bar(
+                    name=f'Retornantes Sáb {ano}',
+                    x=df_ano_c['Mês'],
+                    y=df_ano_c['Total Consulta Plantão Sábado - Google Retornantes'],
+                    marker_color=cores[ano]['Retornantes Sáb']
+                ),
+                row=2, col=1
+            )
+        
+        fig.update_layout(
+            height=800,
+            showlegend=True,
+            title_text=f"Análise de Plantão por Dia da Semana - {', '.join(unidade_selecionada)}",
+            barmode='group',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+        
+        # Atualiza os eixos
+        fig.update_xaxes(title_text="Mês", row=2, col=1)
+        fig.update_yaxes(title_text="Número de Atendimentos", row=1, col=1)
+        fig.update_yaxes(title_text="Número de Atendimentos", row=2, col=1)
+        
+        return fig
+        
+    elif tipo == 'Plantão Emergencial':
+        # Explicação do gráfico
+        st.markdown("""
+        <div class="graph-explanation" style="color: white; background-color: #003366; border-radius: 5px; padding: 15px; margin-bottom: 15px;">
+            <h4 style="color: #FFFFFF;">Como interpretar este gráfico:</h4>
+            <p>Esta visualização analisa os atendimentos noturnos realizados durante o plantão:</p>
+            <ul>
+                <li><strong>Gráfico Superior - Volume de Atendimentos:</strong>
+                    <ul>
+                        <li>Mostra a quantidade de atendimentos noturnos por mês</li>
+                        <li>Permite identificar períodos de maior demanda</li>
+                        <li>Compara volumes entre diferentes anos</li>
+                    </ul>
+                </li>
+                <li><strong>Gráfico Inferior - Faturamento:</strong>
+                    <ul>
+                        <li>Apresenta o faturamento gerado pelos atendimentos noturnos</li>
+                        <li>Permite análise da sazonalidade do faturamento</li>
+                        <li>Compara desempenho financeiro entre períodos</li>
+                    </ul>
+                </li>
+            </ul>
+            <p>Use esta análise para:</p>
+            <ul>
+                <li>Planejar equipes de plantão noturno</li>
+                <li>Identificar períodos que requerem mais recursos</li>
+                <li>Avaliar o impacto financeiro dos atendimentos noturnos</li>
+                <li>Otimizar processos em períodos de alta demanda</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Filtra os dados
+        df_filtered = df4e[
+            (df4e['Unidade'].isin(unidade_selecionada)) &
+            (df4e['Ano'].isin(ano_selecionado)) &
+            (df4e['Mês'].isin(mes_selecionado))
+        ]
+        
+        fig = make_subplots(rows=2, cols=1,
+                           subplot_titles=('Volume de Atendimentos Noturnos',
+                                         'Faturamento dos Plantões Noturnos'),
+                           vertical_spacing=0.2)
+        
+        # Add traces for volume
+        for ano in sorted(ano_selecionado):
+            df_ano = df_filtered[df_filtered['Ano'] == ano]
+            
+            # Novos pacientes
+            fig.add_trace(
+                go.Scatter(x=df_ano['Mês'],
+                          y=df_ano['Total Consulta Plantão Noturno Google Novos'],
+                          name=f'Novos {ano}',
+                          mode='lines+markers'),
+                row=1, col=1
+            )
+            
+            # Retornantes
+            fig.add_trace(
+                go.Scatter(x=df_ano['Mês'],
+                          y=df_ano['Total Consulta Plantão Noturno Google Retornantes'],
+                          name=f'Retornantes {ano}',
+                          mode='lines+markers',
+                          line=dict(dash='dash')),
+                row=1, col=1
+            )
+            
+            # Faturamento Novos
+            fig.add_trace(
+                go.Scatter(x=df_ano['Mês'],
+                          y=df_ano['Faturamento Líquido Total Consulta Plantão Noturno Google Novos'],
+                          name=f'Fat. Novos {ano}',
+                          mode='lines+markers'),
+                row=2, col=1
+            )
+            
+            # Faturamento Retornantes
+            fig.add_trace(
+                go.Scatter(x=df_ano['Mês'],
+                          y=df_ano['Faturamento Líquido Total Consulta Plantão Noturno Google Retornantes'],
+                          name=f'Fat. Retornantes {ano}',
+                          mode='lines+markers',
+                          line=dict(dash='dash')),
+                row=2, col=1
+            )
+        
+        fig.update_layout(
+            height=800,
+            showlegend=True,
+            title_text=f'Análise de Atendimentos Noturnos - {", ".join(unidade_selecionada)}',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+        
+        # Atualiza os eixos
+        fig.update_xaxes(title_text="Mês", row=2, col=1)
+        fig.update_yaxes(title_text="Número de Atendimentos", row=1, col=1)
+        fig.update_yaxes(title_text="Faturamento (R$)", row=2, col=1, tickformat="R$,.2f")
+        
+        return fig
+
+    elif tipo == 'Análise Temporal Plantão':
+        # Explicação do gráfico
+        st.markdown("""
+        <div class="graph-explanation" style="color: white; background-color: #003366; border-radius: 5px; padding: 15px; margin-bottom: 15px;">
+            <h4 style="color: #FFFFFF;">Como interpretar este gráfico:</h4>
+            <p>Esta visualização apresenta a evolução temporal dos diferentes tipos de plantão:</p>
+            <ul>
+                <li><strong>Gráfico Superior - Volume de Atendimentos:</strong>
+                    <ul>
+                        <li>Compara o volume de atendimentos entre os diferentes tipos de plantão</li>
+                        <li>Permite identificar tendências ao longo do tempo</li>
+                        <li>Mostra a distribuição entre dias úteis, fins de semana e feriados</li>
+                    </ul>
+                </li>
+                <li><strong>Gráfico Inferior - Faturamento por Tipo:</strong>
+                    <ul>
+                        <li>Apresenta o faturamento discriminado por tipo de plantão</li>
+                        <li>Permite comparar a rentabilidade de cada modalidade</li>
+                        <li>Mostra a evolução do faturamento ao longo do tempo</li>
+                    </ul>
+                </li>
+            </ul>
+            <p>Use esta análise para:</p>
+            <ul>
+                <li>Identificar padrões sazonais nos diferentes tipos de plantão</li>
+                <li>Otimizar a alocação de recursos por período</li>
+                <li>Avaliar o crescimento do serviço de plantão ao longo do tempo</li>
+                <li>Planejar melhorias específicas para cada tipo de atendimento</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Filtra os dados de plantão da Tabela4A
+        df_filtered = df4a[
+            (df4a['Unidade'].isin(unidade_selecionada)) &
+            (df4a['Ano'].isin(ano_selecionado)) &
+            (df4a['Mês'].isin(mes_selecionado))
+        ]
+        
+        # Cria subplots
+        fig = make_subplots(
+            rows=2, cols=1,
+            subplot_titles=('Volume de Atendimentos por Tipo de Plantão',
+                          'Faturamento por Tipo de Plantão'),
+            vertical_spacing=0.2
+        )
+        
+        # Definição dos tipos de plantão e suas cores
+        tipos_plantao = {
+            'Domingo/Feriado': {
+                'volume': 'Total Consulta Plantão Domingo/Feriado',
+                'faturamento': 'Faturamento Líquido Total Consulta Plantão Domingo/Feriado',
+                'cor': '#1f77b4'
+            },
+            'Sábado': {
+                'volume': 'Total Consulta Plantão Sábado',
+                'faturamento': 'Faturamento Líquido Total Consulta Plantão Sábado',
+                'cor': '#ff7f0e'
+            },
+            'Noturno': {
+                'volume': 'Total Consulta Plantão Noturno',
+                'faturamento': 'Faturamento Líquido Total Consulta Plantão Noturno',
+                'cor': '#2ca02c'
+            },
+            'Emergencial': {
+                'volume': 'Total Consulta Procedimento Emergencial Plantão',
+                'faturamento': 'Faturamento Líquido Total Consulta Procedimento Emergencial Plantão',
+                'cor': '#d62728'
+            }
+        }
+        
+        # Adiciona as linhas para cada tipo de plantão
+        for tipo, info in tipos_plantao.items():
+            for ano in sorted(ano_selecionado):
+                df_ano = df_filtered[df_filtered['Ano'] == ano]
+                
+                # Volume de atendimentos
+                fig.add_trace(
+                    go.Scatter(
+                        x=df_ano['Mês'],
+                        y=df_ano[info['volume']],
+                        name=f'{tipo} {ano}',
+                        mode='lines+markers',
+                        line=dict(color=info['cor']),
+                        legendgroup=f'grupo_{tipo}',
+                        showlegend=True
+                    ),
+                    row=1, col=1
+                )
+                
+                # Faturamento
+                fig.add_trace(
+                    go.Scatter(
+                        x=df_ano['Mês'],
+                        y=df_ano[info['faturamento']],
+                        name=f'Fat. {tipo} {ano}',
+                        mode='lines+markers',
+                        line=dict(color=info['cor'], dash='dash'),
+                        legendgroup=f'grupo_{tipo}',
+                        showlegend=True
+                    ),
+                    row=2, col=1
+                )
+        
+        # Atualiza o layout
+        fig.update_layout(
+            height=800,
+            showlegend=True,
+            title_text=f'Análise Temporal dos Plantões - {", ".join(unidade_selecionada)}',
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
+        )
+        
+        # Atualiza os eixos
+        fig.update_xaxes(title_text="Mês", row=2, col=1)
+        fig.update_yaxes(title_text="Número de Atendimentos", row=1, col=1)
+        fig.update_yaxes(title_text="Faturamento (R$)", row=2, col=1, tickformat="R$,.2f")
+        
+        return fig
+
+
+    elif tipo == 'Comparativo Plantão':
+        # Explicação do gráfico
+        st.markdown("""
+        <div class="graph-explanation" style="color: white; background-color: #003366; border-radius: 5px; padding: 15px; margin-bottom: 15px;">
+            <h4 style="color: #FFFFFF;">Como interpretar este gráfico:</h4>
+            <p>Este gráfico apresenta uma análise comparativa detalhada dos diferentes tipos de plantão:</p>
+            <ul>
+                <li><strong>Gráfico Superior - Comparativo Mensal:</strong>
+                    <ul>
+                        <li>Compara o volume de atendimentos mês a mês para cada tipo de plantão</li>
+                        <li>Permite visualizar a distribuição dos atendimentos entre diferentes modalidades</li>
+                        <li>Identifica o peso de cada tipo de plantão no total de atendimentos</li>
+                    </ul>
+                </li>
+                <li><strong>Gráfico Inferior - Análise Financeira:</strong>
+                    <ul>
+                        <li>Compara o faturamento entre os diferentes tipos de plantão</li>
+                        <li>Mostra o ticket médio por tipo de plantão</li>
+                        <li>Permite avaliar a performance financeira de cada modalidade</li>
+                    </ul>
+                </li>
+            </ul>
+            <p>Use esta análise para:</p>
+            <ul>
+                <li>Identificar as modalidades de plantão mais demandadas</li>
+                <li>Comparar a eficiência financeira entre os tipos de plantão</li>
+                <li>Planejar a distribuição de recursos entre as modalidades</li>
+                <li>Tomar decisões sobre expansão ou ajuste dos serviços</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Filtra os dados
+        df_filtered = df4a[
+            (df4a['Unidade'].isin(unidade_selecionada)) &
+            (df4a['Ano'].isin(ano_selecionado)) &
+            (df4a['Mês'].isin(mes_selecionado))
+        ]
+        
+        # Calcula as somas totais e médias para cada tipo de plantão
+        metricas_plantao = {
+            'Domingo/Feriado': {
+                'volume': 'Total Consulta Plantão Domingo/Feriado',
+                'faturamento': 'Faturamento Líquido Total Consulta Plantão Domingo/Feriado',
+                'cor': '#1f77b4'
+            },
+            'Sábado': {
+                'volume': 'Total Consulta Plantão Sábado',
+                'faturamento': 'Faturamento Líquido Total Consulta Plantão Sábado',
+                'cor': '#ff7f0e'
+            },
+            'Noturno': {
+                'volume': 'Total Consulta Plantão Noturno',
+                'faturamento': 'Faturamento Líquido Total Consulta Plantão Noturno',
+                'cor': '#2ca02c'
+            },
+            'Emergencial': {
+                'volume': 'Total Consulta Procedimento Emergencial Plantão',
+                'faturamento': 'Faturamento Líquido Total Consulta Procedimento Emergencial Plantão',
+                'cor': '#d62728'
+            }
+        }
+        
+        # Cria subplots
+        fig = make_subplots(
+            rows=2, cols=2,
+            subplot_titles=('Volume de Atendimentos', 'Distribuição do Volume', 
+                          'Faturamento Total', 'Ticket Médio'),
+            specs=[[{"type": "bar"}, {"type": "pie"}],
+                  [{"type": "bar"}, {"type": "bar"}]]
+        )
+        
+        # Dados para os gráficos
+        volumes = {}
+        faturamentos = {}
+        tickets_medios = {}
+        
+        for tipo, info in metricas_plantao.items():
+            volumes[tipo] = df_filtered[info['volume']].sum()
+            faturamentos[tipo] = df_filtered[info['faturamento']].sum()
+            tickets_medios[tipo] = faturamentos[tipo] / volumes[tipo] if volumes[tipo] > 0 else 0
+        
+        # 1. Gráfico de barras - Volume
+        fig.add_trace(
+            go.Bar(
+                x=list(volumes.keys()),
+                y=list(volumes.values()),
+                name='Volume',
+                marker_color=[info['cor'] for info in metricas_plantao.values()]
+            ),
+            row=1, col=1
+        )
+        
+        # 2. Gráfico de pizza - Distribuição do Volume
+        fig.add_trace(
+            go.Pie(
+                labels=list(volumes.keys()),
+                values=list(volumes.values()),
+                marker_colors=[info['cor'] for info in metricas_plantao.values()]
+            ),
+            row=1, col=2
+        )
+        
+        # 3. Gráfico de barras - Faturamento
+        fig.add_trace(
+            go.Bar(
+                x=list(faturamentos.keys()),
+                y=list(faturamentos.values()),
+                name='Faturamento',
+                marker_color=[info['cor'] for info in metricas_plantao.values()]
+            ),
+            row=2, col=1
+        )
+        
+        # 4. Gráfico de barras - Ticket Médio
+        fig.add_trace(
+            go.Bar(
+                x=list(tickets_medios.keys()),
+                y=list(tickets_medios.values()),
+                name='Ticket Médio',
+                marker_color=[info['cor'] for info in metricas_plantao.values()]
+            ),
+            row=2, col=2
+        )
+        
+        # Atualiza o layout
+        fig.update_layout(
+            height=800,
+            showlegend=False,
+            title_text=f'Análise Comparativa dos Plantões - {", ".join(unidade_selecionada)}'
+        )
+        
+        # Formatação dos eixos
+        fig.update_yaxes(title_text="Número de Atendimentos", row=1, col=1)
+        fig.update_yaxes(title_text="Faturamento (R$)", row=2, col=1, tickformat="R$,.2f")
+        fig.update_yaxes(title_text="Ticket Médio (R$)", row=2, col=2, tickformat="R$,.2f")
+        
+        return fig
+
+         # Se nenhum tipo de gráfico for reconhecido, retorna None
+    return None                      
 
         
 
